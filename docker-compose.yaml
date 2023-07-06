@@ -1,55 +1,103 @@
+# version: '3'
+
+# services:
+#   db:
+#     image: postgres
+#     ports:
+#       - '5000:5432'
+
+#     environment:
+#       POSTGRES_DB: postgres
+#       POSTGRES_USER: postgres
+#       POSTGRES_PASSWORD: 1234
+
+    
+#   web:
+    
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     command: python manage.py runserver 0.0.0.0:8001
+    
+#     volumes:
+#       - .:/code
+#     ports:
+#       - "8001:8000"
+#     depends_on:
+#       - db
+      
+
+#     networks:
+#       - shortner
+     
+
 version: '3'
-
 services:
-  db:
-    image: postgres
-    # volumes:
-      # -postgres_data:var/lib/postgresql/data/
+  app:
+    build: .
+    command: sh -c "python manage.py migrate && gunicorn --bind 0.0.0.0:8000 Url_shortener.wsgi"
+    ports:
+      - 8000:8000
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
-
-    # volumes:
-      # -postgres_data:var/lib/postgresql/data/
+      - REDIS_HOST=redis
 
   redis:
-    image: redis
+    container_name: redis
+    image: redis:latest
+    expose:
+      - 6379
 
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
+  db:
+    container_name: postgres
+    image: postgres:latest
+    expose:
+      - 5432
     volumes:
-      - .:/code
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-      # - redis
-    # links:
-      # - redis
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mypass
 
   worker:
-    build: .
-    command: celery -A CryptoPriceChecker worker --loglevel=info
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sh -c "sleep 10 &&  celery -A CryptoPriceChecker worker --loglevel=info"
+    environment:
+     - C_FORCE_ROOT="true"
+  
     volumes:
       - .:/code
     depends_on:
       - db
-      - redis
-    links:
-      - redis
+    networks:
+      - shortner
 
   beat:
-    build: .
-    command: celery -A CryptoPriceChecker beat --loglevel=info
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    command: sh -c "sleep 10 &&  celery -A CryptoPriceChecker beat --loglevel=info"
+
     volumes:
       - .:/code
     depends_on:
       - db
-      - redis
-    links:
-      - redis
+  
+    networks:
+      - shortner
 
-  # volumes:
-    # postgres_data:
+networks:
+  shortner:
+    driver: bridge
+
+
+volumes:
+  postgres_data:

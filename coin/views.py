@@ -7,7 +7,7 @@ from .serializers import CoinSerializer
 class TopFiveCoinsView(APIView):
 
     def get(self, request):
-        # coins = Coin.objects.all().order_by('-updated_at')[:5]
+
         coins = Coin.objects.all()[:5]
 
         serializer = CoinSerializer(coins, many=True)
